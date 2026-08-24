@@ -4,10 +4,28 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cuentas</title>
+<script>
+  // Watchdog: registers BEFORE any external resource below. If the app hasn't
+  // started within 6s (e.g. a font/script request hangs on a bad connection),
+  // show a plain-text diagnostic instead of an eternally blank page.
+  window.appBootstrapped = false;
+  setTimeout(function(){
+    if(!window.appBootstrapped){
+      document.documentElement.innerHTML =
+        '<body style="background:#12181B;color:#F1E9D8;font-family:sans-serif;padding:24px;line-height:1.5;">' +
+        '<h2>No se pudo cargar la app</h2>' +
+        '<p>Algún recurso externo (fuente, Chart.js o Supabase) no ha cargado a tiempo. ' +
+        'Revisa tu conexión a internet y recarga la página.</p></body>';
+    }
+  }, 6000);
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js" onerror="window.__chartFailed=true;"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" onerror="
+  window.appBootstrapped = true;
+  document.documentElement.innerHTML = '<body style=\'background:#12181B;color:#F1E9D8;font-family:sans-serif;padding:24px;line-height:1.5;\'><h2>No se pudo cargar Supabase</h2><p>El script de Supabase (cdn.jsdelivr.net) no ha cargado. Revisa tu conexión o si algo lo está bloqueando.</p></body>';
+"></script>
 <style>
   :root{
     --ink:#12181B;
@@ -525,6 +543,8 @@
 <div class="toast" id="toast">Guardado</div>
 
 <script>
+window.appBootstrapped = true; // proves execution reached this point; disarms the head watchdog
+
 // --- Supabase config ---
 // Fill these in from your Supabase project: Project Settings → API.
 const SUPABASE_URL = 'https://ccidycgoensfgzedbeev.supabase.co';
