@@ -4,17 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cuentas</title>
-<!-- TEMPORAL: consola de depuración visible en pantalla, para ver errores sin ordenador.
-     Quitar esta línea (y la siguiente) una vez resuelto el problema. -->
-<script src="https://cdn.jsdelivr.net/npm/eruda" crossorigin="anonymous"></script>
-<script>try{ eruda.init(); }catch(e){}</script>
-<script>
-window.addEventListener('error', function(e){
-  console.log('DETALLE ERROR →', e.message, '| archivo:', e.filename, '| línea:', e.lineno, '| objeto:', e.error);
-});
-</script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap">
 <style>
@@ -532,11 +522,7 @@ window.addEventListener('error', function(e){
 <div class="toast" id="toast">Guardado</div>
 
 <script>
-// --- Supabase config ---
-// Fill these in from your Supabase project: Project Settings → API.
-const SUPABASE_URL = 'https://ccidycgoensfgzedbeev.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNjaWR5Y2dvZW5zZmd6ZWRiZWV2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1NDg0NzcsImV4cCI6MjEwMzEyNDQ3N30.4Kca86aetohC8Y7fLkX5P1ajfuvJxxrfCmtMtWmLTko';
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const STORAGE_KEY = 'finance-state-v2';
 
 const DEFAULT_STATE = {
   accounts: { abanca: 129.26, efectivo: 200, xtb: 321.45, traderepublic: 0 },
@@ -679,16 +665,12 @@ function runMigrationsAndAutoApply(){
   return [...appliedIncome, ...appliedExpenses];
 }
 
-// Data layer, backed by Supabase (table "finance_state", one row per user,
-// protected by row-level security so each user only ever sees their own row).
+// Data layer, backed by localStorage (this browser, this device).
 async function loadState(){
-  const { data: { user } } = await supabase.auth.getUser();
-  if(!user){ showLogin(); return; }
   try{
-    const { data, error } = await supabase.from('finance_state').select('data').eq('user_id', user.id).maybeSingle();
-    if(error) throw error;
-    state = (data && data.data) ? data.data : JSON.parse(JSON.stringify(DEFAULT_STATE));
-    if(!data) await persist();
+    const raw = localStorage.getItem(STORAGE_KEY);
+    state = raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(DEFAULT_STATE));
+    if(!raw) await persist();
   }catch(e){
     console.error('Error cargando', e);
     state = JSON.parse(JSON.stringify(DEFAULT_STATE));
@@ -702,10 +684,8 @@ async function loadState(){
 }
 
 async function persist(){
-  const { data: { user } } = await supabase.auth.getUser();
-  if(!user) return;
-  const { error } = await supabase.from('finance_state').upsert({ user_id: user.id, data: state, updated_at: new Date().toISOString() });
-  if(error) console.error('Error guardando', error);
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+  catch(e){ console.error('Error guardando', e); }
 }
 
 function showToast(msg){
@@ -1240,7 +1220,7 @@ document.getElementById('reset-btn').addEventListener('click', async ()=>{
   }
 });
 
-// --- Login gate (Supabase Auth): email + contraseña, sin más ---
+// --- Login gate: email + contraseña guardados en este navegador, sin servicios externos ---
 function showLogin(){
   document.getElementById('app').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
@@ -1251,40 +1231,45 @@ function showLogin(){
 function showApp(){
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
+  loadState();
 }
 
-document.getElementById('login-submit').addEventListener('click', async ()=>{
+document.getElementById('login-submit').addEventListener('click', ()=>{
   const email = document.getElementById('login-identifier').value.trim();
   const password = document.getElementById('login-pin').value;
   const errEl = document.getElementById('login-error');
   errEl.textContent = '';
   if(!email || !password){ errEl.textContent = 'Rellena email y contraseña.'; return; }
 
-  let result = await supabase.auth.signInWithPassword({ email, password });
-  if(result.error){
-    // Si no existe la cuenta todavía, la crea con esas mismas credenciales.
-    result = await supabase.auth.signUp({ email, password });
-  }
-  if(result.error){ errEl.textContent = result.error.message; return; }
-  if(!result.data.session){ errEl.textContent = 'Cuenta creada. Revisa tu email para confirmarla y vuelve a entrar.'; return; }
+  const savedEmail = localStorage.getItem('auth_email');
+  const savedPassword = localStorage.getItem('auth_password');
 
+  if(savedEmail === null){
+    // Primera vez: estas credenciales se guardan como las tuyas.
+    localStorage.setItem('auth_email', email);
+    localStorage.setItem('auth_password', password);
+  } else if(savedEmail !== email || savedPassword !== password){
+    errEl.textContent = 'Email o contraseña incorrectos.';
+    return;
+  }
+  localStorage.setItem('auth_session', 'true');
   showApp();
-  loadState();
 });
 
 document.getElementById('login-pin').addEventListener('keydown', (e)=>{
   if(e.key === 'Enter') document.getElementById('login-submit').click();
 });
 
-document.getElementById('logout-btn').addEventListener('click', async ()=>{
-  await supabase.auth.signOut();
+document.getElementById('logout-btn').addEventListener('click', ()=>{
+  localStorage.removeItem('auth_session');
   showLogin();
 });
 
-supabase.auth.getSession().then(({ data })=>{
-  if(data.session){ showApp(); loadState(); }
-  else { showLogin(); }
-});
+if(localStorage.getItem('auth_session') === 'true'){
+  showApp();
+} else {
+  showLogin();
+}
 </script>
 </body>
 </html>
