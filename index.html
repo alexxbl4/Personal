@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
   :root{
     --ink:#12181B;
@@ -430,10 +430,10 @@
     </section>
 
   </main>
-</div>
 
-<div class="fab">
-  <button class="btn btn-primary" id="add-btn">+ Añadir movimiento</button>
+  <div class="fab">
+    <button class="btn btn-primary" id="add-btn">+ Añadir movimiento</button>
+  </div>
 </div>
 
 <div class="overlay" id="overlay">
@@ -530,9 +530,29 @@
 const SUPABASE_URL = 'https://ccidycgoensfgzedbeev.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNjaWR5Y2dvZW5zZmd6ZWRiZWV2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1NDg0NzcsImV4cCI6MjEwMzEyNDQ3N30.4Kca86aetohC8Y7fLkX5P1ajfuvJxxrfCmtMtWmLTko';
 let supabase = null;
-if(!SUPABASE_URL.startsWith('TU_') && !SUPABASE_ANON_KEY.startsWith('TU_')){
-  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let initError = null;
+try{
+  if(!SUPABASE_URL.startsWith('TU_') && !SUPABASE_ANON_KEY.startsWith('TU_')){
+    if(!window.supabase) throw new Error('El script de Supabase no cargó (revisa tu conexión y recarga).');
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }
+}catch(e){
+  initError = e.message || 'Error inicializando Supabase.';
+  console.error(e);
 }
+
+// Last-resort safety net: if anything below throws unexpectedly during startup,
+// show a visible message instead of leaving a blank screen.
+window.addEventListener('error', (e)=>{
+  const ls = document.getElementById('login-screen');
+  const app = document.getElementById('app');
+  if(app && app.style.display !== 'none') return; // already inside the app, ignore
+  if(ls){
+    ls.style.display = 'flex';
+    const err = document.getElementById('login-error');
+    if(err) err.textContent = 'Error cargando la app: ' + e.message;
+  }
+});
 
 const DEFAULT_STATE = {
   accounts: { abanca: 129.26, efectivo: 200, xtb: 321.45, traderepublic: 0 },
@@ -1244,7 +1264,10 @@ function showLogin(){
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('login-pin').value = '';
   document.getElementById('login-error').textContent = '';
-  if(!supabase){
+  if(initError){
+    document.getElementById('login-error').textContent = initError;
+    document.getElementById('login-submit').disabled = true;
+  } else if(!supabase){
     document.getElementById('login-error').textContent = 'Falta configurar Supabase en el código (mira el README).';
     document.getElementById('login-submit').disabled = true;
   }
