@@ -6,10 +6,15 @@
 <title>Cuentas</title>
 <!-- TEMPORAL: consola de depuración visible en pantalla, para ver errores sin ordenador.
      Quitar esta línea (y la siguiente) una vez resuelto el problema. -->
-<script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+<script src="https://cdn.jsdelivr.net/npm/eruda" crossorigin="anonymous"></script>
 <script>try{ eruda.init(); }catch(e){}</script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+window.addEventListener('error', function(e){
+  console.log('DETALLE ERROR →', e.message, '| archivo:', e.filename, '| línea:', e.lineno, '| objeto:', e.error);
+});
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" crossorigin="anonymous"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap">
 <style>
