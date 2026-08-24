@@ -4,28 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cuentas</title>
-<script>
-  // Watchdog: registers BEFORE any external resource below. If the app hasn't
-  // started within 6s (e.g. a font/script request hangs on a bad connection),
-  // show a plain-text diagnostic instead of an eternally blank page.
-  window.appBootstrapped = false;
-  setTimeout(function(){
-    if(!window.appBootstrapped){
-      document.documentElement.innerHTML =
-        '<body style="background:#12181B;color:#F1E9D8;font-family:sans-serif;padding:24px;line-height:1.5;">' +
-        '<h2>No se pudo cargar la app</h2>' +
-        '<p>Algún recurso externo (fuente, Chart.js o Supabase) no ha cargado a tiempo. ' +
-        'Revisa tu conexión a internet y recarga la página.</p></body>';
-    }
-  }, 6000);
-</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js" onerror="window.__chartFailed=true;"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" onerror="
-  window.appBootstrapped = true;
-  document.documentElement.innerHTML = '<body style=\'background:#12181B;color:#F1E9D8;font-family:sans-serif;padding:24px;line-height:1.5;\'><h2>No se pudo cargar Supabase</h2><p>El script de Supabase (cdn.jsdelivr.net) no ha cargado. Revisa tu conexión o si algo lo está bloqueando.</p></body>';
-"></script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap">
 <style>
   :root{
     --ink:#12181B;
@@ -206,7 +188,6 @@
   .login-box h1{font-size:24px;margin-bottom:6px;}
   .login-box .eyebrow{margin-bottom:18px;display:block;}
   .login-error{color:var(--rust);font-size:12px;margin-top:10px;min-height:16px;}
-  .login-switch{text-align:center;margin-top:16px;font-size:12px;color:var(--paper-dim);cursor:pointer;text-decoration:underline;}
 
   @media (max-width:760px){
     .app{flex-direction:column;}
@@ -230,14 +211,13 @@
 <div class="login-screen" id="login-screen" style="display:none;">
   <div class="login-box">
     <span class="eyebrow">CUENTAS</span>
-    <h1 id="login-title">Iniciar sesión</h1>
+    <h1>Iniciar sesión</h1>
     <label>Email</label>
     <input type="email" id="login-identifier" autocomplete="username">
     <label>Contraseña</label>
     <input type="password" id="login-pin" autocomplete="current-password">
     <div class="login-error" id="login-error"></div>
     <button class="btn btn-primary" id="login-submit" style="margin-top:16px;">Entrar</button>
-    <div class="login-switch" id="login-switch">¿Primera vez? Crear cuenta</div>
   </div>
 </div>
 
@@ -543,36 +523,11 @@
 <div class="toast" id="toast">Guardado</div>
 
 <script>
-window.appBootstrapped = true; // proves execution reached this point; disarms the head watchdog
-
 // --- Supabase config ---
 // Fill these in from your Supabase project: Project Settings → API.
 const SUPABASE_URL = 'https://ccidycgoensfgzedbeev.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNjaWR5Y2dvZW5zZmd6ZWRiZWV2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1NDg0NzcsImV4cCI6MjEwMzEyNDQ3N30.4Kca86aetohC8Y7fLkX5P1ajfuvJxxrfCmtMtWmLTko';
-let supabase = null;
-let initError = null;
-try{
-  if(!SUPABASE_URL.startsWith('TU_') && !SUPABASE_ANON_KEY.startsWith('TU_')){
-    if(!window.supabase) throw new Error('El script de Supabase no cargó (revisa tu conexión y recarga).');
-    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  }
-}catch(e){
-  initError = e.message || 'Error inicializando Supabase.';
-  console.error(e);
-}
-
-// Last-resort safety net: if anything below throws unexpectedly during startup,
-// show a visible message instead of leaving a blank screen.
-window.addEventListener('error', (e)=>{
-  const ls = document.getElementById('login-screen');
-  const app = document.getElementById('app');
-  if(app && app.style.display !== 'none') return; // already inside the app, ignore
-  if(ls){
-    ls.style.display = 'flex';
-    const err = document.getElementById('login-error');
-    if(err) err.textContent = 'Error cargando la app: ' + e.message;
-  }
-});
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const DEFAULT_STATE = {
   accounts: { abanca: 129.26, efectivo: 200, xtb: 321.45, traderepublic: 0 },
@@ -1276,21 +1231,12 @@ document.getElementById('reset-btn').addEventListener('click', async ()=>{
   }
 });
 
-// --- Login gate (Supabase Auth) ---
-let authMode = 'login'; // 'login' | 'signup'
-
+// --- Login gate (Supabase Auth): email + contraseña, sin más ---
 function showLogin(){
   document.getElementById('app').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('login-pin').value = '';
   document.getElementById('login-error').textContent = '';
-  if(initError){
-    document.getElementById('login-error').textContent = initError;
-    document.getElementById('login-submit').disabled = true;
-  } else if(!supabase){
-    document.getElementById('login-error').textContent = 'Falta configurar Supabase en el código (mira el README).';
-    document.getElementById('login-submit').disabled = true;
-  }
 }
 
 function showApp(){
@@ -1298,33 +1244,21 @@ function showApp(){
   document.getElementById('app').style.display = 'flex';
 }
 
-document.getElementById('login-switch').addEventListener('click', ()=>{
-  authMode = authMode === 'login' ? 'signup' : 'login';
-  document.getElementById('login-title').textContent = authMode === 'login' ? 'Iniciar sesión' : 'Crear cuenta';
-  document.getElementById('login-submit').textContent = authMode === 'login' ? 'Entrar' : 'Crear cuenta';
-  document.getElementById('login-switch').textContent = authMode === 'login' ? '¿Primera vez? Crear cuenta' : '¿Ya tienes cuenta? Inicia sesión';
-  document.getElementById('login-error').textContent = '';
-});
-
 document.getElementById('login-submit').addEventListener('click', async ()=>{
-  if(!supabase) return;
   const email = document.getElementById('login-identifier').value.trim();
   const password = document.getElementById('login-pin').value;
   const errEl = document.getElementById('login-error');
   errEl.textContent = '';
   if(!email || !password){ errEl.textContent = 'Rellena email y contraseña.'; return; }
-  if(password.length < 6){ errEl.textContent = 'La contraseña debe tener al menos 6 caracteres.'; return; }
 
-  const result = authMode === 'signup'
-    ? await supabase.auth.signUp({ email, password })
-    : await supabase.auth.signInWithPassword({ email, password });
-
-  if(result.error){ errEl.textContent = result.error.message; return; }
-
-  if(authMode === 'signup' && !result.data.session){
-    errEl.textContent = 'Cuenta creada. Revisa tu email para confirmarla y luego inicia sesión.';
-    return;
+  let result = await supabase.auth.signInWithPassword({ email, password });
+  if(result.error){
+    // Si no existe la cuenta todavía, la crea con esas mismas credenciales.
+    result = await supabase.auth.signUp({ email, password });
   }
+  if(result.error){ errEl.textContent = result.error.message; return; }
+  if(!result.data.session){ errEl.textContent = 'Cuenta creada. Revisa tu email para confirmarla y vuelve a entrar.'; return; }
+
   showApp();
   loadState();
 });
@@ -1334,44 +1268,13 @@ document.getElementById('login-pin').addEventListener('keydown', (e)=>{
 });
 
 document.getElementById('logout-btn').addEventListener('click', async ()=>{
-  if(supabase) await supabase.auth.signOut();
+  await supabase.auth.signOut();
   showLogin();
 });
 
-let bootstrapped = false;
-
-async function bootstrap(){
-  try{
-    if(!supabase){ showLogin(); bootstrapped = true; return; }
-    const { data, error } = await supabase.auth.getSession();
-    if(error) throw error;
-    bootstrapped = true;
-    if(data.session){ showApp(); await loadState(); }
-    else { showLogin(); }
-  }catch(e){
-    console.error('Error de arranque', e);
-    bootstrapped = true;
-    showLogin();
-    document.getElementById('login-error').textContent = 'Error conectando con Supabase: ' + (e.message || e);
-  }
-}
-bootstrap();
-
-// Absolute fallback: if nothing has resolved after 5s (e.g. a hung network request),
-// force the login screen with a diagnostic message instead of staying blank forever.
-setTimeout(()=>{
-  if(!bootstrapped){
-    showLogin();
-    document.getElementById('login-error').textContent = 'Tardó demasiado en conectar con Supabase. Revisa tu conexión, o que la URL/clave sean correctas.';
-  }
-}, 5000);
-
-window.addEventListener('unhandledrejection', (e)=>{
-  const app = document.getElementById('app');
-  if(app && app.style.display !== 'none') return;
-  bootstrapped = true;
-  showLogin();
-  document.getElementById('login-error').textContent = 'Error inesperado: ' + (e.reason && e.reason.message ? e.reason.message : e.reason);
+supabase.auth.getSession().then(({ data })=>{
+  if(data.session){ showApp(); loadState(); }
+  else { showLogin(); }
 });
 </script>
 </body>
