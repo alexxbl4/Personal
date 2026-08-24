@@ -1318,14 +1318,41 @@ document.getElementById('logout-btn').addEventListener('click', async ()=>{
   showLogin();
 });
 
-if(!supabase){
-  showLogin();
-} else {
-  supabase.auth.getSession().then(({ data })=>{
-    if(data.session){ showApp(); loadState(); }
+let bootstrapped = false;
+
+async function bootstrap(){
+  try{
+    if(!supabase){ showLogin(); bootstrapped = true; return; }
+    const { data, error } = await supabase.auth.getSession();
+    if(error) throw error;
+    bootstrapped = true;
+    if(data.session){ showApp(); await loadState(); }
     else { showLogin(); }
-  });
+  }catch(e){
+    console.error('Error de arranque', e);
+    bootstrapped = true;
+    showLogin();
+    document.getElementById('login-error').textContent = 'Error conectando con Supabase: ' + (e.message || e);
+  }
 }
+bootstrap();
+
+// Absolute fallback: if nothing has resolved after 5s (e.g. a hung network request),
+// force the login screen with a diagnostic message instead of staying blank forever.
+setTimeout(()=>{
+  if(!bootstrapped){
+    showLogin();
+    document.getElementById('login-error').textContent = 'Tardó demasiado en conectar con Supabase. Revisa tu conexión, o que la URL/clave sean correctas.';
+  }
+}, 5000);
+
+window.addEventListener('unhandledrejection', (e)=>{
+  const app = document.getElementById('app');
+  if(app && app.style.display !== 'none') return;
+  bootstrapped = true;
+  showLogin();
+  document.getElementById('login-error').textContent = 'Error inesperado: ' + (e.reason && e.reason.message ? e.reason.message : e.reason);
+});
 </script>
 </body>
 </html>
