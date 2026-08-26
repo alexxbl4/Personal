@@ -296,6 +296,7 @@
           <div class="acc" data-acc="efectivo"><div class="lbl">Efectivo</div><div class="val" id="acc-efectivo">0€</div></div>
           <div class="acc" data-acc="xtb"><div class="lbl">XTB</div><div class="val" id="acc-xtb">0€</div></div>
           <div class="acc" data-acc="traderepublic"><div class="lbl">Trade Republic</div><div class="val" id="acc-traderepublic">0€</div></div>
+          <div class="acc" data-acc="btc"><div class="lbl">BTC</div><div class="val" id="acc-btc">0€</div></div>
         </div>
       </div>
 
@@ -362,14 +363,23 @@
         <h1 style="font-size:26px;">Inversión</h1>
       </header>
       <div class="card">
+        <h3>XTB</h3><span class="sub">S&amp;P 500 + oro</span>
         <div class="stat-row" style="grid-template-columns:1fr 1fr;">
-          <div class="stat"><div class="lbl">Valor actual (XTB)</div><div class="val" id="inv-actual">0€</div></div>
+          <div class="stat"><div class="lbl">Valor actual</div><div class="val" id="inv-actual">0€</div></div>
           <div class="stat"><div class="lbl">Rendimiento</div><div class="val" id="inv-gain">0€</div></div>
         </div>
-        <span class="sub" style="margin-top:10px;display:block;">Aportado: <span id="inv-principal">0€</span> · Toca "Valor actual (XTB)" en Resumen &gt; Cuentas para actualizar tras revisar tu bróker</span>
+        <span class="sub" style="margin-top:10px;display:block;">Aportado: <span id="inv-principal">0€</span> · Toca "XTB" en Resumen &gt; Cuentas para actualizar tras revisar tu bróker</span>
       </div>
       <div class="card">
-        <h3>Aportaciones</h3><span class="sub">Traspasos registrados a inversión</span>
+        <h3>BTC</h3><span class="sub">Otra plataforma, aparte de XTB</span>
+        <div class="stat-row" style="grid-template-columns:1fr 1fr;">
+          <div class="stat"><div class="lbl">Valor actual</div><div class="val" id="inv-btc-actual">0€</div></div>
+          <div class="stat"><div class="lbl">Rendimiento</div><div class="val" id="inv-btc-gain">0€</div></div>
+        </div>
+        <span class="sub" style="margin-top:10px;display:block;">Aportado: <span id="inv-btc-principal">0€</span> · Toca "BTC" en Resumen &gt; Cuentas para actualizar tras revisar la plataforma</span>
+      </div>
+      <div class="card">
+        <h3>Aportaciones</h3><span class="sub">Traspasos registrados a inversión (XTB y BTC)</span>
         <div id="mov-list-inversion"></div>
       </div>
     </section>
@@ -443,6 +453,7 @@
         <button data-type="gasto">Gasto</button>
         <button data-type="pago_madre">Pago a madre</button>
         <button data-type="inversion">A inversión (XTB)</button>
+        <button data-type="inversion_btc">A inversión (BTC)</button>
         <button data-type="fondo">A fondo (Trade Republic)</button>
         <button data-type="interes">Interés del fondo</button>
       </div>
@@ -525,8 +536,9 @@
 const STORAGE_KEY = 'finance-state-v2';
 
 const DEFAULT_STATE = {
-  accounts: { abanca: 129.26, efectivo: 200, xtb: 321.45, traderepublic: 0 },
+  accounts: { abanca: 129.26, efectivo: 200, xtb: 321.45, traderepublic: 0, btc: 0 },
   investment: { principal: 298.81 },
+  investmentBtc: { principal: 0 },
   fund: { principal: 0 },
   debt: { total: 3430.20, paid: 0 },
   savingsGoal: 2500,
@@ -550,7 +562,7 @@ let state = null;
 const CAT_NAMES = {
   gasolina:'Gasolina', ocio:'Ocio', varios:'Varios', hosting:'Hosting web',
   gimnasio:'Gimnasio', spotify:'Spotify', otro:'Otro', ingreso:'Ingreso',
-  pago_madre:'Pago a madre', inversion:'A inversión', fondo:'Aportación al fondo', interes:'Interés del fondo'
+  pago_madre:'Pago a madre', inversion:'A inversión (XTB)', inversion_btc:'A inversión (BTC)', fondo:'Aportación al fondo', interes:'Interés del fondo'
 };
 
 function fmt(n){
@@ -659,6 +671,8 @@ function runMigrationsAndAutoApply(){
   // Backward-compat: older saved states may not have Trade Republic account / fund tracking
   if(state.accounts.traderepublic === undefined) state.accounts.traderepublic = 0;
   if(state.fund === undefined) state.fund = { principal: 0 };
+  if(state.accounts.btc === undefined) state.accounts.btc = 0;
+  if(state.investmentBtc === undefined) state.investmentBtc = { principal: 0 };
 
   const appliedIncome = applyAutoIncome();
   const appliedExpenses = applyAutoExpenses();
@@ -751,7 +765,7 @@ function computeNetWorthHistory(currentNetWorth){
   const debtTotal = DEFAULT_STATE.debt.total;
   const sorted = [...state.movements].sort((a,b)=> a.ts - b.ts);
 
-  const nwAt = ()=> acc.abanca + acc.efectivo + acc.xtb + acc.traderepublic - Math.max(0, debtTotal - debtPaid);
+  const nwAt = ()=> acc.abanca + acc.efectivo + acc.xtb + acc.traderepublic + acc.btc - Math.max(0, debtTotal - debtPaid);
 
   const points = [{ x: sorted.length ? sorted[0].ts - 1 : Date.now() - 1, y: nwAt() }];
   sorted.forEach(mv=>{
@@ -759,6 +773,7 @@ function computeNetWorthHistory(currentNetWorth){
     else if(mv.type === 'gasto') acc[mv.account] -= mv.amount;
     else if(mv.type === 'pago_madre'){ acc[mv.account] -= mv.amount; debtPaid = Math.min(debtTotal, debtPaid + mv.amount); }
     else if(mv.type === 'inversion'){ acc[mv.account] -= mv.amount; acc.xtb += mv.amount; }
+    else if(mv.type === 'inversion_btc'){ acc[mv.account] -= mv.amount; acc.btc += mv.amount; }
     else if(mv.type === 'fondo'){ acc[mv.account] -= mv.amount; acc.traderepublic += mv.amount; }
     else if(mv.type === 'interes'){ acc.traderepublic += mv.amount; }
     points.push({ x: mv.ts, y: nwAt() });
@@ -848,7 +863,7 @@ function render(){
   const liquid = state.accounts.abanca + state.accounts.efectivo;
   const fund = state.accounts.traderepublic;
   const debtRemaining = Math.max(0, state.debt.total - state.debt.paid);
-  const netWorth = state.accounts.abanca + state.accounts.efectivo + state.accounts.xtb + state.accounts.traderepublic - debtRemaining;
+  const netWorth = state.accounts.abanca + state.accounts.efectivo + state.accounts.xtb + state.accounts.traderepublic + state.accounts.btc - debtRemaining;
   const gain = state.accounts.xtb - state.investment.principal;
   const fundGain = state.accounts.traderepublic - state.fund.principal;
 
@@ -874,6 +889,7 @@ function render(){
   document.getElementById('acc-efectivo').textContent = fmt(state.accounts.efectivo);
   document.getElementById('acc-xtb').textContent = fmt(state.accounts.xtb);
   document.getElementById('acc-traderepublic').textContent = fmt(state.accounts.traderepublic);
+  document.getElementById('acc-btc').textContent = fmt(state.accounts.btc);
 
   // Próximos movimientos
   const upcomingEl = document.getElementById('upcoming-list');
@@ -956,7 +972,15 @@ function render(){
   gainEl.textContent = (gain >= 0 ? '+' : '') + fmt(gain);
   gainEl.style.color = gain >= 0 ? 'var(--sage)' : 'var(--rust)';
   document.getElementById('inv-principal').textContent = fmt(state.investment.principal);
-  movList('mov-list-inversion', 'inversion');
+
+  const btcGain = state.accounts.btc - state.investmentBtc.principal;
+  document.getElementById('inv-btc-actual').textContent = fmt(state.accounts.btc);
+  const btcGainEl = document.getElementById('inv-btc-gain');
+  btcGainEl.textContent = (btcGain >= 0 ? '+' : '') + fmt(btcGain);
+  btcGainEl.style.color = btcGain >= 0 ? 'var(--sage)' : 'var(--rust)';
+  document.getElementById('inv-btc-principal').textContent = fmt(state.investmentBtc.principal);
+
+  movList('mov-list-inversion', null, null, ['inversion','inversion_btc']);
 
   // Fondo
   document.getElementById('fondo-nums').textContent = fmt(fund) + ' / ' + fmt(state.savingsGoal);
@@ -1025,6 +1049,7 @@ document.getElementById('save-mv').addEventListener('click', async ()=>{
   else if(currentType === 'gasto'){ state.accounts[account] -= amount; }
   else if(currentType === 'pago_madre'){ state.accounts[account] -= amount; state.debt.paid = Math.min(state.debt.total, state.debt.paid + amount); }
   else if(currentType === 'inversion'){ state.accounts[account] -= amount; state.accounts.xtb += amount; state.investment.principal += amount; }
+  else if(currentType === 'inversion_btc'){ state.accounts[account] -= amount; state.accounts.btc += amount; state.investmentBtc.principal += amount; }
   else if(currentType === 'fondo'){ state.accounts[account] -= amount; state.accounts.traderepublic += amount; state.fund.principal += amount; }
   else if(currentType === 'interes'){ state.accounts.traderepublic += amount; }
 
@@ -1096,6 +1121,7 @@ function reverseMovementEffect(mv){
   else if(mv.type === 'gasto') state.accounts[mv.account] += mv.amount;
   else if(mv.type === 'pago_madre'){ state.accounts[mv.account] += mv.amount; state.debt.paid = Math.max(0, state.debt.paid - mv.amount); }
   else if(mv.type === 'inversion'){ state.accounts[mv.account] += mv.amount; state.accounts.xtb -= mv.amount; state.investment.principal -= mv.amount; }
+  else if(mv.type === 'inversion_btc'){ state.accounts[mv.account] += mv.amount; state.accounts.btc -= mv.amount; state.investmentBtc.principal -= mv.amount; }
   else if(mv.type === 'fondo'){ state.accounts[mv.account] += mv.amount; state.accounts.traderepublic -= mv.amount; state.fund.principal -= mv.amount; }
   else if(mv.type === 'interes') state.accounts.traderepublic -= mv.amount;
 }
@@ -1104,6 +1130,7 @@ function applyMovementEffect(mv){
   else if(mv.type === 'gasto') state.accounts[mv.account] -= mv.amount;
   else if(mv.type === 'pago_madre'){ state.accounts[mv.account] -= mv.amount; state.debt.paid = Math.min(state.debt.total, state.debt.paid + mv.amount); }
   else if(mv.type === 'inversion'){ state.accounts[mv.account] -= mv.amount; state.accounts.xtb += mv.amount; state.investment.principal += mv.amount; }
+  else if(mv.type === 'inversion_btc'){ state.accounts[mv.account] -= mv.amount; state.accounts.btc += mv.amount; state.investmentBtc.principal += mv.amount; }
   else if(mv.type === 'fondo'){ state.accounts[mv.account] -= mv.amount; state.accounts.traderepublic += mv.amount; state.fund.principal += mv.amount; }
   else if(mv.type === 'interes') state.accounts.traderepublic += mv.amount;
 }
