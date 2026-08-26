@@ -343,7 +343,11 @@
         <div class="networth" style="font-size:28px;color:var(--rust);" id="gas-mes">0,00 €</div>
       </div>
       <div class="card">
-        <h3>Presupuesto del mes</h3><span class="sub">Gasolina, ocio y varios · toca el importe estimado en "Gastos fijos" para cambiar la meta</span>
+        <h3>Gasto prescindible</h3><span class="sub">Lo que podrías eliminar o recortar más fácilmente</span>
+        <div class="networth" style="font-size:28px;" id="gas-prescindible">0,00 €</div>
+      </div>
+      <div class="card">
+        <h3>Presupuesto del mes</h3><span class="sub">Gasolina, restaurantes, ocio y varios · toca el importe estimado en "Gastos fijos" para cambiar la meta</span>
         <div id="budget-list"></div>
       </div>
       <div class="card">
@@ -467,6 +471,7 @@
       <label id="cat-label">Categoría</label>
       <select id="mv-category">
         <option value="gasolina">Gasolina</option>
+        <option value="restaurantes">Restaurantes/bares</option>
         <option value="ocio">Ocio</option>
         <option value="varios">Varios</option>
         <option value="hosting">Hosting web</option>
@@ -510,6 +515,7 @@
         <label>Categoría</label>
         <select id="edit-mv-category">
           <option value="gasolina">Gasolina</option>
+          <option value="restaurantes">Restaurantes/bares</option>
           <option value="ocio">Ocio</option>
           <option value="varios">Varios</option>
           <option value="hosting">Hosting web</option>
@@ -550,6 +556,7 @@ const DEFAULT_STATE = {
     { id:'hosting', name:'Hosting web', day:23, amount:30.24, neutral:false, auto:true, intervalMonths:1, nextDueDate:null },
     { id:'spotify', name:'Spotify (te reembolsan, neto 0)', day:7, amount:20.99, neutral:true, auto:false },
     { id:'gasolina', name:'Gasolina', day:null, amount:120, neutral:false, auto:false },
+    { id:'restaurantes', name:'Restaurantes/bares', day:null, amount:80, neutral:false, auto:false },
     { id:'ocio', name:'Ocio', day:null, amount:200, neutral:false, auto:false },
     { id:'varios', name:'Varios', day:null, amount:100, neutral:false, auto:false },
     { id:'gimnasio', name:'Gimnasio (cada 3 meses)', day:18, amount:75, neutral:false, auto:true, intervalMonths:3, nextDueDate:'2026-11-18' }
@@ -560,9 +567,16 @@ const DEFAULT_STATE = {
 let state = null;
 
 const CAT_NAMES = {
-  gasolina:'Gasolina', ocio:'Ocio', varios:'Varios', hosting:'Hosting web',
+  gasolina:'Gasolina', restaurantes:'Restaurantes/bares', ocio:'Ocio', varios:'Varios', hosting:'Hosting web',
   gimnasio:'Gimnasio', spotify:'Spotify', otro:'Otro', ingreso:'Ingreso',
   pago_madre:'Pago a madre', inversion:'A inversión (XTB)', inversion_btc:'A inversión (BTC)', fondo:'Aportación al fondo', interes:'Interés del fondo'
+};
+
+// Whether each expense category counts as "necesario" or "prescindible" (junk spend
+// that's realistically easiest to cut). Used for the discretionary-spend summary.
+const CATEGORY_ESSENTIAL = {
+  hosting: true, gimnasio: true, gasolina: true, spotify: true,
+  restaurantes: false, ocio: false, varios: false, otro: false
 };
 
 function fmt(n){
@@ -613,12 +627,13 @@ function addMonths(dateVal, n){
 
 // Config used to backfill fields on fixed-expense items saved by older app versions.
 const AUTO_CONFIG = {
-  hosting:   { auto:true,  intervalMonths:1, day:23 },
-  spotify:   { auto:false },
-  gasolina:  { auto:false },
-  ocio:      { auto:false },
-  varios:    { auto:false },
-  gimnasio:  { auto:true,  intervalMonths:3, day:18, nextDueDate:'2026-11-18' }
+  hosting:      { auto:true,  intervalMonths:1, day:23 },
+  spotify:      { auto:false },
+  gasolina:     { auto:false },
+  restaurantes: { auto:false },
+  ocio:         { auto:false },
+  varios:       { auto:false },
+  gimnasio:     { auto:true,  intervalMonths:3, day:18, nextDueDate:'2026-11-18' }
 };
 
 // Auto-deducts fixed expenses marked auto:true (hosting, gimnasio) once their due date
@@ -673,6 +688,10 @@ function runMigrationsAndAutoApply(){
   if(state.fund === undefined) state.fund = { principal: 0 };
   if(state.accounts.btc === undefined) state.accounts.btc = 0;
   if(state.investmentBtc === undefined) state.investmentBtc = { principal: 0 };
+  // Backward-compat: older saved states won't have the "restaurantes" category yet
+  if(!state.fixed.some(fx => fx.id === 'restaurantes')){
+    state.fixed.push({ id:'restaurantes', name:'Restaurantes/bares', day:null, amount:80, neutral:false, auto:false });
+  }
 
   const appliedIncome = applyAutoIncome();
   const appliedExpenses = applyAutoExpenses();
@@ -721,6 +740,14 @@ function thisMonthCategorySum(catId){
   const now = new Date();
   return state.movements
     .filter(m => m.type === 'gasto' && m.category === catId)
+    .filter(m => { const d = new Date(m.ts); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); })
+    .reduce((s,m)=> s + m.amount, 0);
+}
+
+function thisMonthDiscretionarySum(){
+  const now = new Date();
+  return state.movements
+    .filter(m => m.type === 'gasto' && CATEGORY_ESSENTIAL[m.category] === false)
     .filter(m => { const d = new Date(m.ts); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); })
     .reduce((s,m)=> s + m.amount, 0);
 }
@@ -929,19 +956,21 @@ function render(){
 
   // Gastos
   document.getElementById('gas-mes').textContent = fmt(thisMonthSum('gasto'));
+  document.getElementById('gas-prescindible').textContent = fmt(thisMonthDiscretionarySum());
 
   const budgetEl = document.getElementById('budget-list');
   budgetEl.innerHTML = '';
-  ['gasolina','ocio','varios'].forEach(catId=>{
+  ['gasolina','restaurantes','ocio','varios'].forEach(catId=>{
     const fx = state.fixed.find(f => f.id === catId);
     if(!fx) return;
     const spent = thisMonthCategorySum(catId);
     const pct = fx.amount > 0 ? Math.min(100, (spent / fx.amount) * 100) : 0;
     const over = spent > fx.amount;
+    const essential = CATEGORY_ESSENTIAL[catId];
     const div = document.createElement('div');
     div.className = 'budget-block';
     div.innerHTML = `
-      <div class="budget-top"><span class="budget-name">${fx.name}</span><span class="budget-nums">${fmt(spent)} / ${fmt(fx.amount)}</span></div>
+      <div class="budget-top"><span class="budget-name">${fx.name} ${essential ? '' : '<span style="color:var(--paper-dim);font-weight:400;">· prescindible</span>'}</span><span class="budget-nums">${fmt(spent)} / ${fmt(fx.amount)}</span></div>
       <div class="budget-track"><div class="budget-fill" style="width:${pct}%;background:${over ? 'var(--rust)' : 'var(--sage)'};"></div></div>
     `;
     budgetEl.appendChild(div);
