@@ -268,7 +268,7 @@
           <div class="stat"><div class="lbl">Invertido</div><div class="val" id="rs-inv">0€</div></div>
         </div>
         <div class="progress-block">
-          <div class="progress-top"><span class="progress-name">Deuda madre</span><span class="progress-nums" id="debt-nums"></span></div>
+          <div class="progress-top"><span class="progress-name">Deudas</span><span class="progress-nums" id="debt-nums"></span></div>
           <div class="track"><div class="fill debt" id="debt-fill" style="width:0%"></div></div>
           <div class="progress-caption" id="debt-caption"></div>
         </div>
@@ -351,8 +351,9 @@
         <div id="budget-list"></div>
       </div>
       <div class="card">
-        <h3>Gastos fijos</h3><span class="sub">Toca para editar el importe</span>
+        <h3>Gastos fijos</h3><span class="sub">Toca uno para editarlo o eliminarlo</span>
         <div id="fx-list"></div>
+        <button class="btn btn-ghost" id="add-fixed-btn" style="margin-top:12px;">+ Añadir gasto fijo</button>
       </div>
       <div class="card">
         <h3>Historial</h3><span class="sub">Todos los gastos registrados</span>
@@ -428,14 +429,12 @@
         <h1 style="font-size:26px;">Deudas</h1>
       </header>
       <div class="card">
-        <div class="progress-block">
-          <div class="progress-top"><span class="progress-name">Deuda con tu madre</span><span class="progress-nums" id="deu-nums"></span></div>
-          <div class="track"><div class="fill debt" id="deu-fill" style="width:0%"></div></div>
-          <div class="progress-caption" id="deu-caption"></div>
-        </div>
+        <h3>Tus deudas</h3><span class="sub">Toca una para editarla o eliminarla</span>
+        <div id="debts-list"></div>
       </div>
+      <button class="btn btn-ghost" id="add-debt-btn" style="margin-bottom:14px;">+ Añadir deuda</button>
       <div class="card">
-        <h3>Pagos registrados</h3><span class="sub">Historial de pagos a tu madre</span>
+        <h3>Pagos registrados</h3><span class="sub">Historial de todos los pagos a deudas</span>
         <div id="mov-list-deudas"></div>
       </div>
     </section>
@@ -455,7 +454,7 @@
       <div class="type-toggle" id="type-toggle">
         <button data-type="ingreso" class="active">Ingreso</button>
         <button data-type="gasto">Gasto</button>
-        <button data-type="pago_madre">Pago a madre</button>
+        <button data-type="pago_deuda">Pago a deuda</button>
         <button data-type="inversion">A inversión (XTB)</button>
         <button data-type="inversion_btc">A inversión (BTC)</button>
         <button data-type="fondo">A fondo (Trade Republic)</button>
@@ -467,6 +466,10 @@
           <option value="abanca">Abanca</option>
           <option value="efectivo">Efectivo</option>
         </select>
+      </div>
+      <div id="mv-debt-wrap" style="display:none;">
+        <label>Deuda</label>
+        <select id="mv-debt"></select>
       </div>
       <label id="cat-label">Categoría</label>
       <select id="mv-category">
@@ -536,6 +539,47 @@
   </div>
 </div>
 
+<div class="overlay" id="debt-overlay">
+  <div class="sheet">
+    <div class="sheet-wrap">
+      <button class="close-x" id="close-debt-sheet">✕</button>
+      <h3 id="debt-sheet-title">Nueva deuda</h3>
+      <label>Nombre</label>
+      <input type="text" id="debt-name" placeholder="Ej: Préstamo coche">
+      <label>Importe total</label>
+      <input type="number" id="debt-total" step="0.01" min="0">
+      <label>Ya pagado hasta ahora</label>
+      <input type="number" id="debt-paid" step="0.01" min="0" value="0">
+      <div class="sheet-actions">
+        <button class="btn btn-ghost" id="delete-debt" style="display:none;">Eliminar</button>
+        <button class="btn btn-primary" id="save-debt">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="fixed-overlay">
+  <div class="sheet">
+    <div class="sheet-wrap">
+      <button class="close-x" id="close-fixed-sheet">✕</button>
+      <h3 id="fixed-sheet-title">Nuevo gasto fijo</h3>
+      <label>Nombre</label>
+      <input type="text" id="fixed-name" placeholder="Ej: Seguro del coche">
+      <label>Importe mensual estimado</label>
+      <input type="number" id="fixed-amount" step="0.01" min="0">
+      <label>Tipo</label>
+      <select id="fixed-essential">
+        <option value="true">Necesario</option>
+        <option value="false">Prescindible</option>
+      </select>
+      <div class="sheet-actions">
+        <button class="btn btn-ghost" id="delete-fixed" style="display:none;">Eliminar</button>
+        <button class="btn btn-primary" id="save-fixed">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast">Guardado</div>
 
 <script>
@@ -546,20 +590,20 @@ const DEFAULT_STATE = {
   investment: { principal: 298.81 },
   investmentBtc: { principal: 0 },
   fund: { principal: 0 },
-  debt: { total: 3430.20, paid: 0 },
+  debts: [{ id: 'madre', name: 'Deuda con tu madre', total: 3430.20, paid: 0 }],
   savingsGoal: 2500,
   income: [
     { id:'principal', name:'Ingreso principal', amount:1459.02, dayStart:1, dayEnd:5, lastAppliedMonth:null },
     { id:'extra', name:'Ingreso extra', amount:250, dayStart:15, dayEnd:15, lastAppliedMonth:null }
   ],
   fixed: [
-    { id:'hosting', name:'Hosting web', day:23, amount:30.24, neutral:false, auto:true, intervalMonths:1, nextDueDate:null },
-    { id:'spotify', name:'Spotify (te reembolsan, neto 0)', day:7, amount:20.99, neutral:true, auto:false },
-    { id:'gasolina', name:'Gasolina', day:null, amount:120, neutral:false, auto:false },
-    { id:'restaurantes', name:'Restaurantes/bares', day:null, amount:80, neutral:false, auto:false },
-    { id:'ocio', name:'Ocio', day:null, amount:200, neutral:false, auto:false },
-    { id:'varios', name:'Varios', day:null, amount:100, neutral:false, auto:false },
-    { id:'gimnasio', name:'Gimnasio (cada 3 meses)', day:18, amount:75, neutral:false, auto:true, intervalMonths:3, nextDueDate:'2026-11-18' }
+    { id:'hosting', name:'Hosting web', day:23, amount:30.24, neutral:false, auto:true, intervalMonths:1, nextDueDate:null, essential:true },
+    { id:'spotify', name:'Spotify (te reembolsan, neto 0)', day:7, amount:20.99, neutral:true, auto:false, essential:true },
+    { id:'gasolina', name:'Gasolina', day:null, amount:120, neutral:false, auto:false, essential:true },
+    { id:'restaurantes', name:'Restaurantes/bares', day:null, amount:80, neutral:false, auto:false, essential:false },
+    { id:'ocio', name:'Ocio', day:null, amount:200, neutral:false, auto:false, essential:false },
+    { id:'varios', name:'Varios', day:null, amount:100, neutral:false, auto:false, essential:false },
+    { id:'gimnasio', name:'Gimnasio (cada 3 meses)', day:18, amount:75, neutral:false, auto:true, intervalMonths:3, nextDueDate:'2026-11-18', essential:true }
   ],
   movements: []
 };
@@ -569,15 +613,31 @@ let state = null;
 const CAT_NAMES = {
   gasolina:'Gasolina', restaurantes:'Restaurantes/bares', ocio:'Ocio', varios:'Varios', hosting:'Hosting web',
   gimnasio:'Gimnasio', spotify:'Spotify', otro:'Otro', ingreso:'Ingreso',
-  pago_madre:'Pago a madre', inversion:'A inversión (XTB)', inversion_btc:'A inversión (BTC)', fondo:'Aportación al fondo', interes:'Interés del fondo'
+  pago_deuda:'Pago a deuda', inversion:'A inversión (XTB)', inversion_btc:'A inversión (BTC)', fondo:'Aportación al fondo', interes:'Interés del fondo'
 };
 
-// Whether each expense category counts as "necesario" or "prescindible" (junk spend
-// that's realistically easiest to cut). Used for the discretionary-spend summary.
-const CATEGORY_ESSENTIAL = {
-  hosting: true, gimnasio: true, gasolina: true, spotify: true,
-  restaurantes: false, ocio: false, varios: false, otro: false
-};
+// Fallback for the "otro" catch-all category, which isn't a fixed-expense item.
+// All other categories read essential/prescindible from their fixed-expense item directly.
+const CATEGORY_ESSENTIAL = { otro: false };
+
+function isCategoryEssential(catId){
+  const fx = state.fixed.find(f => f.id === catId);
+  if(fx) return !!fx.essential;
+  return CATEGORY_ESSENTIAL[catId] !== false;
+}
+
+function findDebt(id){ return state.debts.find(d => d.id === id); }
+function debtsTotal(){ return state.debts.reduce((s,d)=> s + d.total, 0); }
+function debtsPaid(){ return state.debts.reduce((s,d)=> s + d.paid, 0); }
+function debtsRemaining(){ return Math.max(0, debtsTotal() - debtsPaid()); }
+
+// Category names can come from a fixed-expense item (including custom ones you add)
+// or fall back to the static CAT_NAMES map (movement types, "otro", legacy categories).
+function categoryLabel(catId){
+  const fx = state.fixed.find(f => f.id === catId);
+  if(fx) return fx.name;
+  return CAT_NAMES[catId] || 'Otro';
+}
 
 function fmt(n){
   return n.toLocaleString('es-ES', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' €';
@@ -677,11 +737,14 @@ function runMigrationsAndAutoApply(){
   // Backward-compat: older saved states may not have auto/intervalMonths/nextDueDate on fixed expenses
   state.fixed.forEach(fx=>{
     const cfg = AUTO_CONFIG[fx.id];
-    if(!cfg) return;
-    if(fx.auto === undefined) fx.auto = cfg.auto;
-    if(fx.intervalMonths === undefined) fx.intervalMonths = cfg.intervalMonths || 1;
-    if(fx.nextDueDate === undefined || fx.nextDueDate === null) fx.nextDueDate = cfg.nextDueDate || null;
-    if(fx.day === undefined || fx.day === null) fx.day = cfg.day || null;
+    if(cfg){
+      if(fx.auto === undefined) fx.auto = cfg.auto;
+      if(fx.intervalMonths === undefined) fx.intervalMonths = cfg.intervalMonths || 1;
+      if(fx.nextDueDate === undefined || fx.nextDueDate === null) fx.nextDueDate = cfg.nextDueDate || null;
+      if(fx.day === undefined || fx.day === null) fx.day = cfg.day || null;
+    }
+    if(fx.essential === undefined) fx.essential = true; // safe default: don't retroactively flag old items as junk
+    if(fx.auto === undefined) fx.auto = false;
   });
   // Backward-compat: older saved states may not have Trade Republic account / fund tracking
   if(state.accounts.traderepublic === undefined) state.accounts.traderepublic = 0;
@@ -690,8 +753,17 @@ function runMigrationsAndAutoApply(){
   if(state.investmentBtc === undefined) state.investmentBtc = { principal: 0 };
   // Backward-compat: older saved states won't have the "restaurantes" category yet
   if(!state.fixed.some(fx => fx.id === 'restaurantes')){
-    state.fixed.push({ id:'restaurantes', name:'Restaurantes/bares', day:null, amount:80, neutral:false, auto:false });
+    state.fixed.push({ id:'restaurantes', name:'Restaurantes/bares', day:null, amount:80, neutral:false, auto:false, essential:false });
   }
+  // Backward-compat: convert the old single-debt object into the debts array
+  if(state.debts === undefined){
+    state.debts = state.debt ? [{ id:'madre', name:'Deuda con tu madre', total: state.debt.total, paid: state.debt.paid }] : [];
+  }
+  // Backward-compat: old debt-payment movements didn't reference a specific debt by id
+  state.movements.forEach(mv=>{
+    if(mv.type === 'pago_madre'){ mv.type = 'pago_deuda'; mv.debtId = 'madre'; }
+  });
+
 
   const appliedIncome = applyAutoIncome();
   const appliedExpenses = applyAutoExpenses();
@@ -747,7 +819,7 @@ function thisMonthCategorySum(catId){
 function thisMonthDiscretionarySum(){
   const now = new Date();
   return state.movements
-    .filter(m => m.type === 'gasto' && CATEGORY_ESSENTIAL[m.category] === false)
+    .filter(m => m.type === 'gasto' && !isCategoryEssential(m.category))
     .filter(m => { const d = new Date(m.ts); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); })
     .reduce((s,m)=> s + m.amount, 0);
 }
@@ -788,17 +860,24 @@ function getUpcoming(){
 // tracked as movements, so the final point always uses the real current net worth.
 function computeNetWorthHistory(currentNetWorth){
   let acc = { ...DEFAULT_STATE.accounts };
-  let debtPaid = DEFAULT_STATE.debt.paid;
-  const debtTotal = DEFAULT_STATE.debt.total;
+  // Seed debt totals/paid from today's debts (totals rarely change once created);
+  // payments get replayed backwards from there via each movement's debtId.
+  const debtState = {};
+  state.debts.forEach(d=>{ debtState[d.id] = { total: d.total, paid: 0 }; });
   const sorted = [...state.movements].sort((a,b)=> a.ts - b.ts);
 
-  const nwAt = ()=> acc.abanca + acc.efectivo + acc.xtb + acc.traderepublic + acc.btc - Math.max(0, debtTotal - debtPaid);
+  const debtRemainingAt = ()=> Object.values(debtState).reduce((s,d)=> s + Math.max(0, d.total - d.paid), 0);
+  const nwAt = ()=> acc.abanca + acc.efectivo + acc.xtb + acc.traderepublic + acc.btc - debtRemainingAt();
 
   const points = [{ x: sorted.length ? sorted[0].ts - 1 : Date.now() - 1, y: nwAt() }];
   sorted.forEach(mv=>{
     if(mv.type === 'ingreso') acc[mv.account] += mv.amount;
     else if(mv.type === 'gasto') acc[mv.account] -= mv.amount;
-    else if(mv.type === 'pago_madre'){ acc[mv.account] -= mv.amount; debtPaid = Math.min(debtTotal, debtPaid + mv.amount); }
+    else if(mv.type === 'pago_deuda'){
+      acc[mv.account] -= mv.amount;
+      const d = debtState[mv.debtId];
+      if(d) d.paid = Math.min(d.total, d.paid + mv.amount);
+    }
     else if(mv.type === 'inversion'){ acc[mv.account] -= mv.amount; acc.xtb += mv.amount; }
     else if(mv.type === 'inversion_btc'){ acc[mv.account] -= mv.amount; acc.btc += mv.amount; }
     else if(mv.type === 'fondo'){ acc[mv.account] -= mv.amount; acc.traderepublic += mv.amount; }
@@ -870,7 +949,11 @@ function movList(container, type, limit, types){
     div.className = 'mov';
     div.dataset.mvId = m.id;
     const isIn = m.type === 'ingreso' || m.type === 'interes';
-    const catLabel = m.type === 'gasto' ? CAT_NAMES[m.category] : CAT_NAMES[m.type];
+    let catLabel = m.type === 'gasto' ? categoryLabel(m.category) : CAT_NAMES[m.type];
+    if(m.type === 'pago_deuda'){
+      const d = findDebt(m.debtId);
+      catLabel = 'Pago: ' + (d ? d.name : 'deuda eliminada');
+    }
     div.innerHTML = `
       <div class="mov-left">
         <span class="mov-cat">${catLabel}${m.note ? ' · ' + m.note : ''}</span>
@@ -889,7 +972,7 @@ function render(){
 
   const liquid = state.accounts.abanca + state.accounts.efectivo;
   const fund = state.accounts.traderepublic;
-  const debtRemaining = Math.max(0, state.debt.total - state.debt.paid);
+  const debtRemaining = debtsRemaining();
   const netWorth = state.accounts.abanca + state.accounts.efectivo + state.accounts.xtb + state.accounts.traderepublic + state.accounts.btc - debtRemaining;
   const gain = state.accounts.xtb - state.investment.principal;
   const fundGain = state.accounts.traderepublic - state.fund.principal;
@@ -902,10 +985,10 @@ function render(){
   document.getElementById('rs-fondo').textContent = fmt(fund);
   document.getElementById('rs-inv').textContent = fmt(state.accounts.xtb);
 
-  const debtPct = state.debt.total > 0 ? Math.min(100, (state.debt.paid / state.debt.total) * 100) : 100;
+  const debtPct = debtsTotal() > 0 ? Math.min(100, (debtsPaid() / debtsTotal()) * 100) : 100;
   document.getElementById('debt-fill').style.width = debtPct + '%';
-  document.getElementById('debt-nums').textContent = fmt(state.debt.paid) + ' / ' + fmt(state.debt.total);
-  document.getElementById('debt-caption').textContent = debtRemaining <= 0 ? '¡Deuda saldada! 🎉' : 'Quedan ' + fmt(debtRemaining);
+  document.getElementById('debt-nums').textContent = fmt(debtsPaid()) + ' / ' + fmt(debtsTotal());
+  document.getElementById('debt-caption').textContent = debtRemaining <= 0 ? '¡Deudas saldadas! 🎉' : 'Quedan ' + fmt(debtRemaining);
 
   const savePct = state.savingsGoal > 0 ? Math.min(100, (fund / state.savingsGoal) * 100) : 100;
   document.getElementById('save-fill').style.width = savePct + '%';
@@ -960,13 +1043,12 @@ function render(){
 
   const budgetEl = document.getElementById('budget-list');
   budgetEl.innerHTML = '';
-  ['gasolina','restaurantes','ocio','varios'].forEach(catId=>{
-    const fx = state.fixed.find(f => f.id === catId);
-    if(!fx) return;
+  state.fixed.filter(fx => !fx.auto && !fx.neutral).forEach(fx=>{
+    const catId = fx.id;
     const spent = thisMonthCategorySum(catId);
     const pct = fx.amount > 0 ? Math.min(100, (spent / fx.amount) * 100) : 0;
     const over = spent > fx.amount;
-    const essential = CATEGORY_ESSENTIAL[catId];
+    const essential = isCategoryEssential(catId);
     const div = document.createElement('div');
     div.className = 'budget-block';
     div.innerHTML = `
@@ -1023,10 +1105,27 @@ function render(){
   movList('mov-list-fondo', null, null, ['fondo','interes']);
 
   // Deudas
-  document.getElementById('deu-fill').style.width = debtPct + '%';
-  document.getElementById('deu-nums').textContent = fmt(state.debt.paid) + ' / ' + fmt(state.debt.total);
-  document.getElementById('deu-caption').textContent = debtRemaining <= 0 ? '¡Deuda saldada! 🎉' : 'Quedan ' + fmt(debtRemaining);
-  movList('mov-list-deudas', 'pago_madre');
+  const debtsListEl = document.getElementById('debts-list');
+  debtsListEl.innerHTML = '';
+  if(state.debts.length === 0){
+    debtsListEl.innerHTML = '<div class="empty">No tienes deudas registradas.</div>';
+  } else {
+    state.debts.forEach(d=>{
+      const remaining = Math.max(0, d.total - d.paid);
+      const pct = d.total > 0 ? Math.min(100, (d.paid / d.total) * 100) : 100;
+      const block = document.createElement('div');
+      block.className = 'progress-block';
+      block.style.cursor = 'pointer';
+      block.dataset.debtId = d.id;
+      block.innerHTML = `
+        <div class="progress-top"><span class="progress-name">${d.name}</span><span class="progress-nums">${fmt(d.paid)} / ${fmt(d.total)}</span></div>
+        <div class="track"><div class="fill debt" style="width:${pct}%"></div></div>
+        <div class="progress-caption">${remaining <= 0 ? '¡Saldada! 🎉' : 'Quedan ' + fmt(remaining)}</div>
+      `;
+      debtsListEl.appendChild(block);
+    });
+  }
+  movList('mov-list-deudas', 'pago_deuda');
 }
 
 // --- Sidebar navigation ---
@@ -1051,6 +1150,19 @@ document.getElementById('add-btn').addEventListener('click', ()=> overlay.classL
 document.getElementById('close-sheet').addEventListener('click', ()=> overlay.classList.remove('show'));
 document.getElementById('cancel-mv').addEventListener('click', ()=> overlay.classList.remove('show'));
 
+function populateDebtSelect(){
+  const sel = document.getElementById('mv-debt');
+  sel.innerHTML = state.debts.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+}
+
+// Categories come from current fixed-expense items, plus a catch-all "Otro".
+function populateCategorySelect(selectEl, selectedValue){
+  const options = state.fixed.map(fx => `<option value="${fx.id}">${fx.name}</option>`);
+  options.push('<option value="otro">Otro</option>');
+  selectEl.innerHTML = options.join('');
+  if(selectedValue) selectEl.value = selectedValue;
+}
+
 typeToggle.addEventListener('click', (e)=>{
   const btn = e.target.closest('button');
   if(!btn) return;
@@ -1060,6 +1172,9 @@ typeToggle.addEventListener('click', (e)=>{
   categorySelect.style.display = currentType === 'gasto' ? 'block' : 'none';
   catLabel.style.display = currentType === 'gasto' ? 'block' : 'none';
   document.getElementById('mv-account-wrap').style.display = currentType === 'interes' ? 'none' : 'block';
+  document.getElementById('mv-debt-wrap').style.display = currentType === 'pago_deuda' ? 'block' : 'none';
+  if(currentType === 'pago_deuda') populateDebtSelect();
+  if(currentType === 'gasto') populateCategorySelect(categorySelect);
 });
 categorySelect.style.display = 'none';
 catLabel.style.display = 'none';
@@ -1067,16 +1182,22 @@ catLabel.style.display = 'none';
 document.getElementById('save-mv').addEventListener('click', async ()=>{
   const amount = parseFloat(document.getElementById('mv-amount').value);
   if(!amount || amount <= 0){ showToast('Pon un importe válido'); return; }
+  if(currentType === 'pago_deuda' && state.debts.length === 0){ showToast('Añade primero una deuda en la sección Deudas'); return; }
   const account = currentType === 'interes' ? 'traderepublic' : accountSelect.value;
   const note = document.getElementById('mv-note').value.trim();
   const category = categorySelect.value;
+  const debtId = currentType === 'pago_deuda' ? document.getElementById('mv-debt').value : null;
 
-  const mv = { id: Date.now().toString(), ts: Date.now(), type: currentType, account, amount, note, category: currentType === 'gasto' ? category : null };
+  const mv = { id: Date.now().toString(), ts: Date.now(), type: currentType, account, amount, note, category: currentType === 'gasto' ? category : null, debtId };
   state.movements.push(mv);
 
   if(currentType === 'ingreso'){ state.accounts[account] += amount; }
   else if(currentType === 'gasto'){ state.accounts[account] -= amount; }
-  else if(currentType === 'pago_madre'){ state.accounts[account] -= amount; state.debt.paid = Math.min(state.debt.total, state.debt.paid + amount); }
+  else if(currentType === 'pago_deuda'){
+    const d = findDebt(debtId);
+    state.accounts[account] -= amount;
+    if(d) d.paid = Math.min(d.total, d.paid + amount);
+  }
   else if(currentType === 'inversion'){ state.accounts[account] -= amount; state.accounts.xtb += amount; state.investment.principal += amount; }
   else if(currentType === 'inversion_btc'){ state.accounts[account] -= amount; state.accounts.btc += amount; state.investmentBtc.principal += amount; }
   else if(currentType === 'fondo'){ state.accounts[account] -= amount; state.accounts.traderepublic += amount; state.fund.principal += amount; }
@@ -1121,13 +1242,108 @@ document.querySelectorAll('.acc').forEach(el=>{
   });
 });
 
-// Fixed expenses (event delegation, list re-rendered)
+// --- Fixed expenses: add / edit / delete ---
+const fixedOverlay = document.getElementById('fixed-overlay');
+let editingFixedId = null;
+
+function openFixedEditor(fx){
+  editingFixedId = fx ? fx.id : null;
+  document.getElementById('fixed-sheet-title').textContent = fx ? 'Editar gasto fijo' : 'Nuevo gasto fijo';
+  document.getElementById('fixed-name').value = fx ? fx.name : '';
+  document.getElementById('fixed-amount').value = fx ? fx.amount : '';
+  document.getElementById('fixed-essential').value = fx ? String(!!fx.essential) : 'true';
+  document.getElementById('delete-fixed').style.display = fx ? 'block' : 'none';
+  fixedOverlay.classList.add('show');
+}
+
+document.getElementById('add-fixed-btn').addEventListener('click', ()=> openFixedEditor(null));
 document.getElementById('fx-list').addEventListener('click', (e)=>{
   const row = e.target.closest('.row-item');
   if(!row) return;
   const fx = state.fixed.find(f => f.id === row.dataset.fixedId);
   if(!fx) return;
-  openValueEditor('Editar — ' + fx.name, fx.amount, (val)=>{ fx.amount = val; });
+  openFixedEditor(fx);
+});
+document.getElementById('close-fixed-sheet').addEventListener('click', ()=> fixedOverlay.classList.remove('show'));
+
+document.getElementById('save-fixed').addEventListener('click', async ()=>{
+  const name = document.getElementById('fixed-name').value.trim();
+  const amount = parseFloat(document.getElementById('fixed-amount').value);
+  const essential = document.getElementById('fixed-essential').value === 'true';
+  if(!name || isNaN(amount) || amount < 0){ showToast('Pon un nombre e importe válidos'); return; }
+
+  if(editingFixedId){
+    const fx = state.fixed.find(f => f.id === editingFixedId);
+    if(fx){ fx.name = name; fx.amount = amount; fx.essential = essential; }
+  } else {
+    state.fixed.push({ id:'custom-' + Date.now(), name, amount, day:null, neutral:false, auto:false, essential });
+  }
+  await persist();
+  render();
+  fixedOverlay.classList.remove('show');
+  showToast('Gasto fijo guardado');
+});
+
+document.getElementById('delete-fixed').addEventListener('click', async ()=>{
+  if(!editingFixedId) return;
+  if(!confirm('¿Eliminar este gasto fijo? No borra movimientos ya registrados con esta categoría.')) return;
+  state.fixed = state.fixed.filter(f => f.id !== editingFixedId);
+  await persist();
+  render();
+  fixedOverlay.classList.remove('show');
+  showToast('Gasto fijo eliminado');
+});
+
+// --- Debts: add / edit / delete ---
+const debtOverlay = document.getElementById('debt-overlay');
+let editingDebtId = null;
+
+function openDebtEditor(d){
+  editingDebtId = d ? d.id : null;
+  document.getElementById('debt-sheet-title').textContent = d ? 'Editar deuda' : 'Nueva deuda';
+  document.getElementById('debt-name').value = d ? d.name : '';
+  document.getElementById('debt-total').value = d ? d.total : '';
+  document.getElementById('debt-paid').value = d ? d.paid : 0;
+  document.getElementById('delete-debt').style.display = d ? 'block' : 'none';
+  debtOverlay.classList.add('show');
+}
+
+document.getElementById('add-debt-btn').addEventListener('click', ()=> openDebtEditor(null));
+document.getElementById('debts-list').addEventListener('click', (e)=>{
+  const row = e.target.closest('[data-debt-id]');
+  if(!row) return;
+  const d = findDebt(row.dataset.debtId);
+  if(!d) return;
+  openDebtEditor(d);
+});
+document.getElementById('close-debt-sheet').addEventListener('click', ()=> debtOverlay.classList.remove('show'));
+
+document.getElementById('save-debt').addEventListener('click', async ()=>{
+  const name = document.getElementById('debt-name').value.trim();
+  const total = parseFloat(document.getElementById('debt-total').value);
+  const paid = parseFloat(document.getElementById('debt-paid').value) || 0;
+  if(!name || isNaN(total) || total < 0){ showToast('Pon un nombre e importe total válidos'); return; }
+
+  if(editingDebtId){
+    const d = findDebt(editingDebtId);
+    if(d){ d.name = name; d.total = total; d.paid = paid; }
+  } else {
+    state.debts.push({ id:'debt-' + Date.now(), name, total, paid });
+  }
+  await persist();
+  render();
+  debtOverlay.classList.remove('show');
+  showToast('Deuda guardada');
+});
+
+document.getElementById('delete-debt').addEventListener('click', async ()=>{
+  if(!editingDebtId) return;
+  if(!confirm('¿Eliminar esta deuda? Los pagos ya registrados se quedarán sin deuda asociada.')) return;
+  state.debts = state.debts.filter(d => d.id !== editingDebtId);
+  await persist();
+  render();
+  debtOverlay.classList.remove('show');
+  showToast('Deuda eliminada');
 });
 
 // Income rows
@@ -1148,7 +1364,11 @@ document.getElementById('goal-row').addEventListener('click', ()=>{
 function reverseMovementEffect(mv){
   if(mv.type === 'ingreso') state.accounts[mv.account] -= mv.amount;
   else if(mv.type === 'gasto') state.accounts[mv.account] += mv.amount;
-  else if(mv.type === 'pago_madre'){ state.accounts[mv.account] += mv.amount; state.debt.paid = Math.max(0, state.debt.paid - mv.amount); }
+  else if(mv.type === 'pago_deuda'){
+    state.accounts[mv.account] += mv.amount;
+    const d = findDebt(mv.debtId);
+    if(d) d.paid = Math.max(0, d.paid - mv.amount);
+  }
   else if(mv.type === 'inversion'){ state.accounts[mv.account] += mv.amount; state.accounts.xtb -= mv.amount; state.investment.principal -= mv.amount; }
   else if(mv.type === 'inversion_btc'){ state.accounts[mv.account] += mv.amount; state.accounts.btc -= mv.amount; state.investmentBtc.principal -= mv.amount; }
   else if(mv.type === 'fondo'){ state.accounts[mv.account] += mv.amount; state.accounts.traderepublic -= mv.amount; state.fund.principal -= mv.amount; }
@@ -1157,7 +1377,11 @@ function reverseMovementEffect(mv){
 function applyMovementEffect(mv){
   if(mv.type === 'ingreso') state.accounts[mv.account] += mv.amount;
   else if(mv.type === 'gasto') state.accounts[mv.account] -= mv.amount;
-  else if(mv.type === 'pago_madre'){ state.accounts[mv.account] -= mv.amount; state.debt.paid = Math.min(state.debt.total, state.debt.paid + mv.amount); }
+  else if(mv.type === 'pago_deuda'){
+    state.accounts[mv.account] -= mv.amount;
+    const d = findDebt(mv.debtId);
+    if(d) d.paid = Math.min(d.total, d.paid + mv.amount);
+  }
   else if(mv.type === 'inversion'){ state.accounts[mv.account] -= mv.amount; state.accounts.xtb += mv.amount; state.investment.principal += mv.amount; }
   else if(mv.type === 'inversion_btc'){ state.accounts[mv.account] -= mv.amount; state.accounts.btc += mv.amount; state.investmentBtc.principal += mv.amount; }
   else if(mv.type === 'fondo'){ state.accounts[mv.account] -= mv.amount; state.accounts.traderepublic += mv.amount; state.fund.principal += mv.amount; }
@@ -1171,13 +1395,13 @@ function openEditMovement(id){
   const mv = state.movements.find(m => m.id === id);
   if(!mv) return;
   editingMovementId = id;
-  document.getElementById('edit-mv-title').textContent = 'Editar — ' + (mv.type === 'gasto' ? CAT_NAMES[mv.category] : CAT_NAMES[mv.type]);
+  document.getElementById('edit-mv-title').textContent = 'Editar — ' + (mv.type === 'gasto' ? categoryLabel(mv.category) : CAT_NAMES[mv.type]);
   document.getElementById('edit-mv-amount').value = mv.amount;
   document.getElementById('edit-mv-note').value = mv.note || '';
   const catWrap = document.getElementById('edit-mv-cat-wrap');
   if(mv.type === 'gasto'){
     catWrap.style.display = 'block';
-    document.getElementById('edit-mv-category').value = mv.category;
+    populateCategorySelect(document.getElementById('edit-mv-category'), mv.category);
   } else {
     catWrap.style.display = 'none';
   }
