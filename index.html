@@ -472,16 +472,7 @@
         <select id="mv-debt"></select>
       </div>
       <label id="cat-label">Categoría</label>
-      <select id="mv-category">
-        <option value="gasolina">Gasolina</option>
-        <option value="restaurantes">Restaurantes/bares</option>
-        <option value="ocio">Ocio</option>
-        <option value="varios">Varios</option>
-        <option value="hosting">Hosting web</option>
-        <option value="gimnasio">Gimnasio</option>
-        <option value="spotify">Spotify</option>
-        <option value="otro">Otro</option>
-      </select>
+      <select id="mv-category"></select>
       <label>Importe (€)</label>
       <input type="number" id="mv-amount" step="0.01" min="0" placeholder="0,00">
       <label>Nota (opcional)</label>
@@ -516,16 +507,7 @@
       <h3 id="edit-mv-title">Editar movimiento</h3>
       <div id="edit-mv-cat-wrap">
         <label>Categoría</label>
-        <select id="edit-mv-category">
-          <option value="gasolina">Gasolina</option>
-          <option value="restaurantes">Restaurantes/bares</option>
-          <option value="ocio">Ocio</option>
-          <option value="varios">Varios</option>
-          <option value="hosting">Hosting web</option>
-          <option value="gimnasio">Gimnasio</option>
-          <option value="spotify">Spotify</option>
-          <option value="otro">Otro</option>
-        </select>
+        <select id="edit-mv-category"></select>
       </div>
       <label>Importe (€)</label>
       <input type="number" id="edit-mv-amount" step="0.01" min="0">
@@ -751,9 +733,15 @@ function runMigrationsAndAutoApply(){
   if(state.fund === undefined) state.fund = { principal: 0 };
   if(state.accounts.btc === undefined) state.accounts.btc = 0;
   if(state.investmentBtc === undefined) state.investmentBtc = { principal: 0 };
-  // Backward-compat: older saved states won't have the "restaurantes" category yet
-  if(!state.fixed.some(fx => fx.id === 'restaurantes')){
-    state.fixed.push({ id:'restaurantes', name:'Restaurantes/bares', day:null, amount:80, neutral:false, auto:false, essential:false });
+
+  // One-time migrations tracked by flag, so that deleting an item afterwards sticks
+  // (checking "does it still exist?" would otherwise resurrect it on every load).
+  if(state.migrations === undefined) state.migrations = {};
+  if(!state.migrations.restaurantesAdded){
+    if(!state.fixed.some(fx => fx.id === 'restaurantes')){
+      state.fixed.push({ id:'restaurantes', name:'Restaurantes/bares', day:null, amount:80, neutral:false, auto:false, essential:false });
+    }
+    state.migrations.restaurantesAdded = true;
   }
   // Backward-compat: convert the old single-debt object into the debts array
   if(state.debts === undefined){
@@ -988,7 +976,8 @@ function render(){
   const debtPct = debtsTotal() > 0 ? Math.min(100, (debtsPaid() / debtsTotal()) * 100) : 100;
   document.getElementById('debt-fill').style.width = debtPct + '%';
   document.getElementById('debt-nums').textContent = fmt(debtsPaid()) + ' / ' + fmt(debtsTotal());
-  document.getElementById('debt-caption').textContent = debtRemaining <= 0 ? '¡Deudas saldadas! 🎉' : 'Quedan ' + fmt(debtRemaining);
+  document.getElementById('debt-caption').textContent =
+    state.debts.length === 0 ? 'Sin deudas registradas' : (debtRemaining <= 0 ? '¡Deudas saldadas! 🎉' : 'Quedan ' + fmt(debtRemaining));
 
   const savePct = state.savingsGoal > 0 ? Math.min(100, (fund / state.savingsGoal) * 100) : 100;
   document.getElementById('save-fill').style.width = savePct + '%';
@@ -1159,6 +1148,9 @@ function populateDebtSelect(){
 function populateCategorySelect(selectEl, selectedValue){
   const options = state.fixed.map(fx => `<option value="${fx.id}">${fx.name}</option>`);
   options.push('<option value="otro">Otro</option>');
+  if(selectedValue && selectedValue !== 'otro' && !state.fixed.some(fx => fx.id === selectedValue)){
+    options.push(`<option value="${selectedValue}">${categoryLabel(selectedValue)} (eliminada)</option>`);
+  }
   selectEl.innerHTML = options.join('');
   if(selectedValue) selectEl.value = selectedValue;
 }
@@ -1321,8 +1313,11 @@ document.getElementById('close-debt-sheet').addEventListener('click', ()=> debtO
 document.getElementById('save-debt').addEventListener('click', async ()=>{
   const name = document.getElementById('debt-name').value.trim();
   const total = parseFloat(document.getElementById('debt-total').value);
-  const paid = parseFloat(document.getElementById('debt-paid').value) || 0;
+  let paid = parseFloat(document.getElementById('debt-paid').value);
+  if(isNaN(paid)) paid = 0;
   if(!name || isNaN(total) || total < 0){ showToast('Pon un nombre e importe total válidos'); return; }
+  if(paid < 0){ showToast('Lo pagado no puede ser negativo'); return; }
+  if(paid > total) paid = total; // clamp instead of allowing an inconsistent state
 
   if(editingDebtId){
     const d = findDebt(editingDebtId);
