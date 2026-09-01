@@ -475,6 +475,8 @@
       <select id="mv-category"></select>
       <label>Importe (€)</label>
       <input type="number" id="mv-amount" step="0.01" min="0" placeholder="0,00">
+      <label>Fecha</label>
+      <input type="date" id="mv-date">
       <label>Nota (opcional)</label>
       <input type="text" id="mv-note" placeholder="Ej: cena con amigos">
       <div class="sheet-actions">
@@ -547,13 +549,31 @@
       <h3 id="fixed-sheet-title">Nuevo gasto fijo</h3>
       <label>Nombre</label>
       <input type="text" id="fixed-name" placeholder="Ej: Seguro del coche">
-      <label>Importe mensual estimado</label>
+      <label id="fixed-amount-label">Importe</label>
       <input type="number" id="fixed-amount" step="0.01" min="0">
       <label>Tipo</label>
       <select id="fixed-essential">
         <option value="true">Necesario</option>
         <option value="false">Prescindible</option>
       </select>
+      <label>¿Se cobra sola automáticamente?</label>
+      <select id="fixed-auto">
+        <option value="false">No, la añado yo cuando pago</option>
+        <option value="true">Sí, cárgala sola</option>
+      </select>
+      <div id="fixed-auto-fields" style="display:none;">
+        <label>Frecuencia</label>
+        <select id="fixed-interval">
+          <option value="1">Cada mes</option>
+          <option value="3">Cada 3 meses</option>
+          <option value="6">Cada 6 meses</option>
+          <option value="12">Cada año</option>
+        </select>
+        <label>Día del mes</label>
+        <input type="number" id="fixed-day" min="1" max="31">
+        <label>Próximo cargo</label>
+        <input type="date" id="fixed-next-due">
+      </div>
       <div class="sheet-actions">
         <button class="btn btn-ghost" id="delete-fixed" style="display:none;">Eliminar</button>
         <button class="btn btn-primary" id="save-fixed">Guardar</button>
@@ -579,7 +599,7 @@ const DEFAULT_STATE = {
     { id:'extra', name:'Ingreso extra', amount:250, dayStart:15, dayEnd:15, lastAppliedMonth:null }
   ],
   fixed: [
-    { id:'hosting', name:'Hosting web', day:23, amount:30.24, neutral:false, auto:true, intervalMonths:1, nextDueDate:null, essential:true },
+    { id:'hosting', name:'Hosting web (anual)', day:27, amount:69.73, neutral:false, auto:true, intervalMonths:12, nextDueDate:'2027-08-27', essential:true },
     { id:'spotify', name:'Spotify (te reembolsan, neto 0)', day:7, amount:20.99, neutral:true, auto:false, essential:true },
     { id:'gasolina', name:'Gasolina', day:null, amount:120, neutral:false, auto:false, essential:true },
     { id:'restaurantes', name:'Restaurantes/bares', day:null, amount:80, neutral:false, auto:false, essential:false },
@@ -1135,7 +1155,11 @@ const categorySelect = document.getElementById('mv-category');
 const catLabel = document.getElementById('cat-label');
 let currentType = 'ingreso';
 
-document.getElementById('add-btn').addEventListener('click', ()=> overlay.classList.add('show'));
+document.getElementById('add-btn').addEventListener('click', ()=>{
+  const d = new Date();
+  document.getElementById('mv-date').value = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  overlay.classList.add('show');
+});
 document.getElementById('close-sheet').addEventListener('click', ()=> overlay.classList.remove('show'));
 document.getElementById('cancel-mv').addEventListener('click', ()=> overlay.classList.remove('show'));
 
@@ -1179,8 +1203,10 @@ document.getElementById('save-mv').addEventListener('click', async ()=>{
   const note = document.getElementById('mv-note').value.trim();
   const category = categorySelect.value;
   const debtId = currentType === 'pago_deuda' ? document.getElementById('mv-debt').value : null;
+  const dateVal = document.getElementById('mv-date').value;
+  const ts = dateVal ? new Date(dateVal + 'T12:00:00').getTime() : Date.now();
 
-  const mv = { id: Date.now().toString(), ts: Date.now(), type: currentType, account, amount, note, category: currentType === 'gasto' ? category : null, debtId };
+  const mv = { id: Date.now().toString() + '-' + Math.random().toString(36).slice(2,7), ts, type: currentType, account, amount, note, category: currentType === 'gasto' ? category : null, debtId };
   state.movements.push(mv);
 
   if(currentType === 'ingreso'){ state.accounts[account] += amount; }
@@ -1238,15 +1264,33 @@ document.querySelectorAll('.acc').forEach(el=>{
 const fixedOverlay = document.getElementById('fixed-overlay');
 let editingFixedId = null;
 
+function dateToInputValue(d){
+  const dt = new Date(d);
+  return dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
+}
+
 function openFixedEditor(fx){
   editingFixedId = fx ? fx.id : null;
   document.getElementById('fixed-sheet-title').textContent = fx ? 'Editar gasto fijo' : 'Nuevo gasto fijo';
   document.getElementById('fixed-name').value = fx ? fx.name : '';
   document.getElementById('fixed-amount').value = fx ? fx.amount : '';
+  document.getElementById('fixed-amount-label').textContent = (fx && fx.auto && fx.intervalMonths !== 1) ? 'Importe del cargo' : 'Importe mensual estimado';
   document.getElementById('fixed-essential').value = fx ? String(!!fx.essential) : 'true';
   document.getElementById('delete-fixed').style.display = fx ? 'block' : 'none';
+
+  const isAuto = fx ? !!fx.auto : false;
+  document.getElementById('fixed-auto').value = String(isAuto);
+  document.getElementById('fixed-auto-fields').style.display = isAuto ? 'block' : 'none';
+  document.getElementById('fixed-interval').value = fx && fx.intervalMonths ? String(fx.intervalMonths) : '1';
+  document.getElementById('fixed-day').value = fx && fx.day ? fx.day : '';
+  document.getElementById('fixed-next-due').value = (fx && fx.nextDueDate) ? dateToInputValue(fx.nextDueDate) : '';
+
   fixedOverlay.classList.add('show');
 }
+
+document.getElementById('fixed-auto').addEventListener('change', (e)=>{
+  document.getElementById('fixed-auto-fields').style.display = e.target.value === 'true' ? 'block' : 'none';
+});
 
 document.getElementById('add-fixed-btn').addEventListener('click', ()=> openFixedEditor(null));
 document.getElementById('fx-list').addEventListener('click', (e)=>{
@@ -1262,13 +1306,23 @@ document.getElementById('save-fixed').addEventListener('click', async ()=>{
   const name = document.getElementById('fixed-name').value.trim();
   const amount = parseFloat(document.getElementById('fixed-amount').value);
   const essential = document.getElementById('fixed-essential').value === 'true';
+  const auto = document.getElementById('fixed-auto').value === 'true';
   if(!name || isNaN(amount) || amount < 0){ showToast('Pon un nombre e importe válidos'); return; }
+
+  let day = null, intervalMonths = 1, nextDueDate = null;
+  if(auto){
+    day = parseInt(document.getElementById('fixed-day').value, 10);
+    intervalMonths = parseInt(document.getElementById('fixed-interval').value, 10) || 1;
+    const nextDueVal = document.getElementById('fixed-next-due').value;
+    if(!day || day < 1 || day > 31 || !nextDueVal){ showToast('Pon día del mes y próximo cargo para el cobro automático'); return; }
+    nextDueDate = new Date(nextDueVal + 'T00:00:00').toISOString();
+  }
 
   if(editingFixedId){
     const fx = state.fixed.find(f => f.id === editingFixedId);
-    if(fx){ fx.name = name; fx.amount = amount; fx.essential = essential; }
+    if(fx){ fx.name = name; fx.amount = amount; fx.essential = essential; fx.auto = auto; fx.day = day; fx.intervalMonths = intervalMonths; fx.nextDueDate = nextDueDate; }
   } else {
-    state.fixed.push({ id:'custom-' + Date.now(), name, amount, day:null, neutral:false, auto:false, essential });
+    state.fixed.push({ id:'custom-' + Date.now(), name, amount, day, neutral:false, auto, intervalMonths, nextDueDate, essential });
   }
   await persist();
   render();
