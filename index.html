@@ -343,17 +343,22 @@
         <div class="networth" style="font-size:28px;color:var(--rust);" id="gas-mes">0,00 €</div>
       </div>
       <div class="card">
+        <h3>Gastos pendientes</h3><span class="sub">Lo que aún te queda por pagar/gastar este mes</span>
+        <div class="networth" style="font-size:28px;" id="gas-pendientes">0,00 €</div>
+      </div>
+      <div class="card">
         <h3>Gasto prescindible</h3><span class="sub">Lo que podrías eliminar o recortar más fácilmente</span>
         <div class="networth" style="font-size:28px;" id="gas-prescindible">0,00 €</div>
       </div>
       <div class="card">
-        <h3>Presupuesto del mes</h3><span class="sub">Gasolina, restaurantes, ocio y varios · toca el importe estimado en "Gastos fijos" para cambiar la meta</span>
+        <h3>Presupuesto del mes</h3><span class="sub">Gasolina, restaurantes, ocio, varios... toca uno para editarlo o eliminarlo</span>
         <div id="budget-list"></div>
+        <button class="btn btn-ghost" id="add-budget-btn" style="margin-top:12px;">+ Añadir categoría de presupuesto</button>
       </div>
       <div class="card">
-        <h3>Gastos fijos</h3><span class="sub">Toca uno para editarlo o eliminarlo</span>
+        <h3>Gastos fijos automáticos</h3><span class="sub">Se cobran solos en su fecha · toca uno para editarlo o eliminarlo</span>
         <div id="fx-list"></div>
-        <button class="btn btn-ghost" id="add-fixed-btn" style="margin-top:12px;">+ Añadir gasto fijo</button>
+        <button class="btn btn-ghost" id="add-fixed-btn" style="margin-top:12px;">+ Añadir gasto fijo automático</button>
       </div>
       <div class="card">
         <h3>Historial</h3><span class="sub">Todos los gastos registrados</span>
@@ -832,6 +837,26 @@ function thisMonthDiscretionarySum(){
     .reduce((s,m)=> s + m.amount, 0);
 }
 
+// What's left to pay/spend this month: remaining budget on manual categories,
+// plus any auto-charge due before the end of this month that hasn't fired yet.
+function thisMonthPendingExpenses(){
+  const today = new Date();
+  const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  let pending = 0;
+  state.fixed.forEach(fx=>{
+    if(fx.neutral) return;
+    if(fx.auto){
+      if(!fx.nextDueDate) return;
+      const due = new Date(fx.nextDueDate);
+      if(due >= today && due <= endOfMonth) pending += fx.amount;
+    } else {
+      const spent = thisMonthCategorySum(fx.id);
+      pending += Math.max(0, fx.amount - spent);
+    }
+  });
+  return pending;
+}
+
 // Builds a short list of what's coming up: auto fixed expenses, recurring income, and
 // a monthly reminder to log the Trade Republic interest (which isn't automatic).
 function getUpcoming(){
@@ -1040,8 +1065,10 @@ function render(){
     div.className = 'row-item';
     div.dataset.incomeId = inc.id;
     const dayLabel = inc.dayStart === inc.dayEnd ? ('Día ' + inc.dayStart) : ('Días ' + inc.dayStart + '–' + inc.dayEnd);
-    const status = inc.lastAppliedMonth === ym ? ' · Aplicado este mes ✓' : ' · Pendiente este mes';
-    div.innerHTML = `<div class="row-left"><span class="row-name">${inc.name}</span><span class="row-date">${dayLabel}${status}</span></div><span class="row-amt">${fmt(inc.amount)}</span>`;
+    const isApplied = inc.lastAppliedMonth === ym;
+    const status = isApplied ? ' · Aplicado este mes ✓' : ' · Pendiente este mes';
+    const markBtn = isApplied ? '' : `<button class="btn-sm btn-primary" data-mark-received="${inc.id}" style="width:auto;padding:6px 10px;border-radius:6px;">Ya cobrado</button>`;
+    div.innerHTML = `<div class="row-left"><span class="row-name">${inc.name}</span><span class="row-date">${dayLabel}${status}</span></div><div style="display:flex;align-items:center;gap:10px;">${markBtn}<span class="row-amt">${fmt(inc.amount)}</span></div>`;
     incList.appendChild(div);
   });
   movList('mov-list-ingresos', 'ingreso');
@@ -1049,10 +1076,15 @@ function render(){
   // Gastos
   document.getElementById('gas-mes').textContent = fmt(thisMonthSum('gasto'));
   document.getElementById('gas-prescindible').textContent = fmt(thisMonthDiscretionarySum());
+  document.getElementById('gas-pendientes').textContent = fmt(thisMonthPendingExpenses());
 
   const budgetEl = document.getElementById('budget-list');
   budgetEl.innerHTML = '';
-  state.fixed.filter(fx => !fx.auto && !fx.neutral).forEach(fx=>{
+  const budgetItems = state.fixed.filter(fx => !fx.auto && !fx.neutral);
+  if(budgetItems.length === 0){
+    budgetEl.innerHTML = '<div class="empty">Sin categorías de presupuesto todavía.</div>';
+  }
+  budgetItems.forEach(fx=>{
     const catId = fx.id;
     const spent = thisMonthCategorySum(catId);
     const pct = fx.amount > 0 ? Math.min(100, (spent / fx.amount) * 100) : 0;
@@ -1060,6 +1092,8 @@ function render(){
     const essential = isCategoryEssential(catId);
     const div = document.createElement('div');
     div.className = 'budget-block';
+    div.style.cursor = 'pointer';
+    div.dataset.fixedId = fx.id;
     div.innerHTML = `
       <div class="budget-top"><span class="budget-name">${fx.name} ${essential ? '' : '<span style="color:var(--paper-dim);font-weight:400;">· prescindible</span>'}</span><span class="budget-nums">${fmt(spent)} / ${fmt(fx.amount)}</span></div>
       <div class="budget-track"><div class="budget-fill" style="width:${pct}%;background:${over ? 'var(--rust)' : 'var(--sage)'};"></div></div>
@@ -1069,7 +1103,11 @@ function render(){
 
   const fxList = document.getElementById('fx-list');
   fxList.innerHTML = '';
-  state.fixed.forEach(fx=>{
+  const fixedAutoItems = state.fixed.filter(fx => fx.auto || fx.neutral);
+  if(fixedAutoItems.length === 0){
+    fxList.innerHTML = '<div class="empty">Sin gastos fijos automáticos todavía.</div>';
+  }
+  fixedAutoItems.forEach(fx=>{
     const div = document.createElement('div');
     div.className = 'row-item';
     div.dataset.fixedId = fx.id;
@@ -1269,16 +1307,16 @@ function dateToInputValue(d){
   return dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
 }
 
-function openFixedEditor(fx){
+function openFixedEditor(fx, defaultAuto){
   editingFixedId = fx ? fx.id : null;
-  document.getElementById('fixed-sheet-title').textContent = fx ? 'Editar gasto fijo' : 'Nuevo gasto fijo';
+  document.getElementById('fixed-sheet-title').textContent = fx ? 'Editar' : (defaultAuto ? 'Nuevo gasto fijo automático' : 'Nueva categoría de presupuesto');
   document.getElementById('fixed-name').value = fx ? fx.name : '';
   document.getElementById('fixed-amount').value = fx ? fx.amount : '';
   document.getElementById('fixed-amount-label').textContent = (fx && fx.auto && fx.intervalMonths !== 1) ? 'Importe del cargo' : 'Importe mensual estimado';
   document.getElementById('fixed-essential').value = fx ? String(!!fx.essential) : 'true';
   document.getElementById('delete-fixed').style.display = fx ? 'block' : 'none';
 
-  const isAuto = fx ? !!fx.auto : false;
+  const isAuto = fx ? !!fx.auto : !!defaultAuto;
   document.getElementById('fixed-auto').value = String(isAuto);
   document.getElementById('fixed-auto-fields').style.display = isAuto ? 'block' : 'none';
   document.getElementById('fixed-interval').value = fx && fx.intervalMonths ? String(fx.intervalMonths) : '1';
@@ -1292,9 +1330,17 @@ document.getElementById('fixed-auto').addEventListener('change', (e)=>{
   document.getElementById('fixed-auto-fields').style.display = e.target.value === 'true' ? 'block' : 'none';
 });
 
-document.getElementById('add-fixed-btn').addEventListener('click', ()=> openFixedEditor(null));
+document.getElementById('add-fixed-btn').addEventListener('click', ()=> openFixedEditor(null, true));
+document.getElementById('add-budget-btn').addEventListener('click', ()=> openFixedEditor(null, false));
 document.getElementById('fx-list').addEventListener('click', (e)=>{
   const row = e.target.closest('.row-item');
+  if(!row) return;
+  const fx = state.fixed.find(f => f.id === row.dataset.fixedId);
+  if(!fx) return;
+  openFixedEditor(fx);
+});
+document.getElementById('budget-list').addEventListener('click', (e)=>{
+  const row = e.target.closest('[data-fixed-id]');
   if(!row) return;
   const fx = state.fixed.find(f => f.id === row.dataset.fixedId);
   if(!fx) return;
@@ -1396,7 +1442,22 @@ document.getElementById('delete-debt').addEventListener('click', async ()=>{
 });
 
 // Income rows
-document.getElementById('income-list').addEventListener('click', (e)=>{
+document.getElementById('income-list').addEventListener('click', async (e)=>{
+  const markBtn = e.target.closest('[data-mark-received]');
+  if(markBtn){
+    const inc = state.income.find(i => i.id === markBtn.dataset.markReceived);
+    if(!inc) return;
+    const ym = currentYM();
+    if(inc.lastAppliedMonth === ym) return; // already applied, ignore
+    const mv = { id: Date.now().toString() + '-' + Math.random().toString(36).slice(2,7), ts: Date.now(), type:'ingreso', account:'abanca', amount: inc.amount, note:'Marcado como cobrado', category:null, debtId:null };
+    state.movements.push(mv);
+    state.accounts.abanca += inc.amount;
+    inc.lastAppliedMonth = ym;
+    await persist();
+    render();
+    showToast('Ingreso registrado');
+    return;
+  }
   const row = e.target.closest('.row-item');
   if(!row) return;
   const inc = state.income.find(i => i.id === row.dataset.incomeId);
