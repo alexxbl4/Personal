@@ -343,7 +343,7 @@
         <div class="networth" style="font-size:28px;color:var(--rust);" id="gas-mes">0,00 €</div>
       </div>
       <div class="card">
-        <h3>Gastos pendientes</h3><span class="sub">Lo que aún te queda por pagar/gastar este mes</span>
+        <h3>Gastos pendientes</h3><span class="sub">Gastos fijos automáticos que tocan este mes y aún no se han cobrado</span>
         <div class="networth" style="font-size:28px;" id="gas-pendientes">0,00 €</div>
       </div>
       <div class="card">
@@ -837,22 +837,17 @@ function thisMonthDiscretionarySum(){
     .reduce((s,m)=> s + m.amount, 0);
 }
 
-// What's left to pay/spend this month: remaining budget on manual categories,
-// plus any auto-charge due before the end of this month that hasn't fired yet.
+// Gastos fijos automáticos (hosting, gimnasio...) que tocan cobrarse entre hoy y
+// fin de mes, y todavía no se han cobrado. No incluye presupuesto sin gastar,
+// porque eso es un techo estimado, no un pago que sepas seguro que vas a hacer.
 function thisMonthPendingExpenses(){
   const today = new Date();
   const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
   let pending = 0;
   state.fixed.forEach(fx=>{
-    if(fx.neutral) return;
-    if(fx.auto){
-      if(!fx.nextDueDate) return;
-      const due = new Date(fx.nextDueDate);
-      if(due >= today && due <= endOfMonth) pending += fx.amount;
-    } else {
-      const spent = thisMonthCategorySum(fx.id);
-      pending += Math.max(0, fx.amount - spent);
-    }
+    if(!fx.auto || fx.neutral || !fx.nextDueDate) return;
+    const due = new Date(fx.nextDueDate);
+    if(due >= today && due <= endOfMonth) pending += fx.amount;
   });
   return pending;
 }
@@ -1196,6 +1191,7 @@ let currentType = 'ingreso';
 document.getElementById('add-btn').addEventListener('click', ()=>{
   const d = new Date();
   document.getElementById('mv-date').value = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  populateCategorySelect(categorySelect); // always fresh, even if "Gasto" was already the active type
   overlay.classList.add('show');
 });
 document.getElementById('close-sheet').addEventListener('click', ()=> overlay.classList.remove('show'));
