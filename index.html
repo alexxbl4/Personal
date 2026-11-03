@@ -1049,8 +1049,10 @@ async function importLegacy(old){
   if(rows.length) await db.insChunks('movements',rows);
 
   const now=new Date(); const recRows=[];
-  incs.forEach(inc=>{ const day=inc.dayEnd||inc.dayStart||1; let d=new Date(now.getFullYear(),now.getMonth(),1);
-    if(day<=now.getDate()) d=new Date(now.getFullYear(),now.getMonth()+1,1);
+  incs.filter(inc=>num(inc.amount)>0).forEach(inc=>{ const day=inc.dayEnd||inc.dayStart||1; let d=new Date(now.getFullYear(),now.getMonth(),1);
+    // la app antigua guardaba el mes cobrado como "año-mes" con el mes empezando en 0
+    const appliedThisMonth = inc.lastAppliedMonth===now.getFullYear()+'-'+now.getMonth();
+    if(day<=now.getDate() || appliedThisMonth) d=new Date(now.getFullYear(),now.getMonth()+1,1);
     const dim=new Date(d.getFullYear(),d.getMonth()+1,0).getDate(); d.setDate(Math.min(day,dim));
     recRows.push({name:clean(inc.name),kind:'ingreso',amount:r2(inc.amount),account_id:accId.abanca,category_id:catId['inc:'+inc.id],interval_months:1,day:Math.min(31,day),next_due:ymd(d),auto:true,active:true}); });
   fixed.filter(f=>f.auto&&!f.neutral&&num(f.amount)>0).forEach(f=>{ const nd=f.nextDueDate?localDate(f.nextDueDate):todayStr();
